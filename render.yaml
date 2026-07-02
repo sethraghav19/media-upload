@@ -11,3 +11,5 @@ services:
         sync: false
       - key: WHATSAPP_API_VERSION
         value: v20.0
+      - key: WHATSAPP_APP_ID
+        sync: false

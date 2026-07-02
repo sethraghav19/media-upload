@@ -56,6 +56,51 @@ app.post('/upload-media', upload.single('file'), async (req, res) => {
     }
 });
 
+app.post('/upload-template-media', upload.single('file'), async (req, res) => {
+    try {
+        if (!req.file) {
+            return res.status(400).json({ error: 'No file uploaded. Please send a file in the "file" field.' });
+        }
+
+        const appId = process.env.WHATSAPP_APP_ID;
+        const accessToken = process.env.WHATSAPP_ACCESS_TOKEN;
+        const apiVersion = process.env.WHATSAPP_API_VERSION || 'v20.0';
+
+        if (!appId || !accessToken) {
+            return res.status(500).json({ error: 'Server misconfiguration: WHATSAPP_APP_ID or WHATSAPP_ACCESS_TOKEN missing.' });
+        }
+
+        // Step 1: Create an Upload Session
+        const sessionUrl = `https://graph.facebook.com/${apiVersion}/${appId}/uploads?file_length=${req.file.size}&file_type=${req.file.mimetype}`;
+        const sessionResponse = await axios.post(sessionUrl, {}, {
+            headers: {
+                'Authorization': `Bearer ${accessToken}`
+            }
+        });
+        
+        const uploadSessionId = sessionResponse.data.id;
+
+        // Step 2: Upload the binary data to the session
+        const uploadUrl = `https://graph.facebook.com/${apiVersion}/${uploadSessionId}`;
+        const uploadResponse = await axios.post(uploadUrl, req.file.buffer, {
+            headers: {
+                'Authorization': `OAuth ${accessToken}`,
+                'file_offset': 0
+            }
+        });
+
+        // Return the {"h": "h::..."} handle
+        res.status(200).json(uploadResponse.data);
+
+    } catch (error) {
+        console.error('Error in Resumable Upload API:', error?.response?.data || error.message);
+        res.status(error?.response?.status || 500).json({
+            error: 'Failed to upload media via Resumable Upload API',
+            details: error?.response?.data || error.message
+        });
+    }
+});
+
 // Health check endpoint
 app.get('/health', (req, res) => {
     res.status(200).json({ status: 'ok' });
